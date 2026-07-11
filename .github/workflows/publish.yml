@@ -1,0 +1,56 @@
+name: Publish
+
+# Manual-only release. Publishing to Maven Central is irreversible, so it never fires
+# automatically — a maintainer dispatches it explicitly, choosing the ref (a release tag
+# like v0.2.0, or main) to build and publish from.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to publish from (release tag, e.g. v0.2.0, or a branch)."
+        required: true
+        default: main
+
+# Publish all library artifacts (JVM + Android + iOS + linux/macos/mingw + js/wasmJs) to Maven
+# Central from a single macOS host, so the deployment is one complete, atomic bundle. macOS K/N
+# can cross-compile the Linux/Windows klibs, and only the macOS host can produce the Apple klibs.
+jobs:
+  publish:
+    runs-on: macos-latest
+    permissions:
+      contents: write # create/update the GitHub Release for the published tag
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Publish to Maven Central Portal
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_IN_MEMORY_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_IN_MEMORY_KEY_PASSWORD }}
+        run: ./gradlew publishToMavenCentral --no-configuration-cache --console=plain
+
+      # When publishing from a version tag (vX.Y.Z), publish a matching GitHub Release. Uses
+      # auto-generated notes; skipped when dispatched from a branch (e.g. main).
+      - name: Create GitHub Release
+        if: startsWith(inputs.ref, 'v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ inputs.ref }}
+        run: |
+          if gh release view "$REF" >/dev/null 2>&1; then
+            gh release edit "$REF" --title "$REF" --generate-notes
+          else
+            gh release create "$REF" --title "$REF" --verify-tag --generate-notes
+          fi

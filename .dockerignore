@@ -1,0 +1,9 @@
+# Keep the Docker build context tiny. The image only needs the staged native binaries under
+# docker/<arch>/ (produced before `docker build`), so exclude VCS/IDE noise and every build dir.
+.git
+.gradle
+.kotlin
+.idea
+**/.DS_Store
+build
+**/build

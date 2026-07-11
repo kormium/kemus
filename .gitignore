@@ -1,0 +1,19 @@
+local.properties
+.gradle
+build/
+*.hprof
+!gradle/wrapper/gradle-wrapper.jar
+
+### IntelliJ IDEA ###
+.idea
+*.iml
+*.ipr
+*.iws
+out/
+
+### VS Code ###
+.vscode/
+
+### Mac OS ###
+.DS_Store
+.kotlin/

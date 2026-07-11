@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  # The bulk of the build on a Linux host (a supported Kotlin/Native host for linuxX64 + the
+  # mingwX64 cross-compile). The GitHub Linux runner ships the Android SDK, so the android
+  # variants of core/client configure fine here too.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # JVM tests: the engine + the ktor plugin (whose tests also drive the remote client
+      # end-to-end against the real server via the ktor test host).
+      - name: JVM tests
+        run: ./gradlew :kemus-core:jvmTest :kemus-ktor-plugin:jvmTest --console=plain
+
+      # Native host tests (linuxX64) for the engine, plus linking the native server executable
+      # to verify CIO + okio link on Kotlin/Native.
+      - name: Native (linuxX64) tests + server link
+        run: ./gradlew :kemus-core:linuxX64Test :kemus-server:linkDebugExecutableLinuxX64 --console=plain
+
+      # Cross-compile the linux/arm64 server binary (the second Docker image arch).
+      - name: Cross-compile linuxArm64 server
+        run: ./gradlew :kemus-server:linkDebugExecutableLinuxArm64 --console=plain
+
+      # Web targets compile (no HTTP server there, so only core + client).
+      - name: Web (js/wasmJs) compile
+        run: >-
+          ./gradlew
+          :kemus-core:compileKotlinJs :kemus-core:compileKotlinWasmJs
+          :kemus-client:compileKotlinJs :kemus-client:compileKotlinWasmJs
+          --console=plain
+
+      # Cross-compile the Windows (mingwX64) artifacts. No Windows runner — this only keeps the
+      # target compiling, including linking the native server executable.
+      - name: Cross-compile Windows (mingwX64)
+        run: >-
+          ./gradlew
+          :kemus-core:compileKotlinMingwX64 :kemus-client:compileKotlinMingwX64
+          :kemus-ktor-plugin:compileKotlinMingwX64 :kemus-server:linkDebugExecutableMingwX64
+          --console=plain
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: "**/build/reports/tests/**"
+          if-no-files-found: ignore
+
+  # Apple + Android targets only build on a macOS host (iOS klibs need it; the runner also ships
+  # the Android SDK). Covers core + client; the server-side modules have no Apple/Android targets.
+  mobile:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build Android + iOS targets, run macOS native tests
+        run: >-
+          ./gradlew
+          compileAndroidMain
+          compileKotlinIosArm64 compileKotlinIosX64 compileKotlinIosSimulatorArm64
+          :kemus-core:macosArm64Test :kemus-server:linkDebugExecutableMacosArm64
+          --console=plain
+
+# Maven Central publishing (.github/workflows/publish.yml) and the Docker image
+# (.github/workflows/docker.yml) are separate, deliberately-triggered workflows.
