@@ -24,6 +24,15 @@ sealed interface KemusValue {
         override val typeName: String get() = "string"
     }
 
+    /**
+     * A binary-safe blob. Held as a raw [ByteArray] in memory (no UTF-16 tax); base64 is applied only
+     * at the text boundaries — the canonical command written to the AOF/change-feed and the RESP wire.
+     * Set/read it with the typed [Kemus.setBytes]/[Kemus.getBytes], or the `SETB`/`GETB` commands.
+     */
+    class Bytes(var value: ByteArray) : KemusValue {
+        override val typeName: String get() = "bytes"
+    }
+
     class KList : KemusValue {
         override val typeName: String get() = "list"
 

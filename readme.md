@@ -67,6 +67,12 @@ Strings, lists, sets, hashes, sorted sets — with `TTL`/expiration, `Pub/Sub` a
 subscriptions (`PSUBSCRIBE`), all on the Redis command vocabulary (`SET`/`GET`/`MGET`/`INCR`, `HSET`,
 `LPUSH`/`LRANGE`, `SADD`, `ZADD`/`ZRANGE`, `EXPIRE`, `KEYS`, `PUBLISH`, …).
 
+**Binary values.** Store raw bytes with the typed `setBytes(key, ByteArray)` / `getBytes(key)` (or
+the `SETB`/`GETB` commands). Bytes live as a `ByteArray` in memory — no UTF‑16 tax — and are base64‑encoded
+only at the text boundaries (AOF, change‑feed, RESP wire), so they get the same TTL, `maxmemory`
+accounting, persistence and offline→online sync as every other value. Handy for blobs like a
+serialized search index (e.g. [kromus](https://github.com/kormium/kromus)).
+
 ---
 
 ## Quick start — embedded (client / offline)

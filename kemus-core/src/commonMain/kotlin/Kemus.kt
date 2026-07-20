@@ -250,6 +250,32 @@ class Kemus(
         }
     }
 
+    // --- binary values (typed embedded API) -----------------------------------------------------
+
+    /**
+     * Store raw [value] bytes under [key], replacing any existing value. Binary-safe: the bytes live
+     * as a [ByteArray] in memory; base64 is applied only when the write is persisted, replicated via
+     * the change feed, or served over RESP. Goes through the normal command pipeline, so TTLs,
+     * `maxmemory` accounting, the AOF and the change index all apply as for any other write.
+     */
+    suspend fun setBytes(key: String, value: ByteArray) {
+        execute(listOf("SETB", key, base64Encode(value)))
+    }
+
+    /**
+     * Read the raw bytes stored under [key] with [setBytes] (or `SETB`), or `null` if the key is
+     * absent or expired. Returns the in-memory [ByteArray] directly — no base64 on the read path.
+     *
+     * @throws IllegalStateException if [key] holds a non-bytes value.
+     */
+    suspend fun getBytes(key: String): ByteArray? = mutex.withLock {
+        when (val v = lookup(key)) {
+            null -> null
+            is KemusValue.Bytes -> v.value
+            else -> error("WRONGTYPE key '$key' holds ${v.typeName}, not bytes")
+        }
+    }
+
     // --- Pub/Sub --------------------------------------------------------------------------------
 
     private suspend fun incCount(channel: String) = mutex.withLock {
@@ -353,6 +379,7 @@ class Kemus(
         fun field(s: String) { sb.append(s.length).append(':').append(s).append(';') }
         when (value) {
             is KemusValue.Str -> { sb.append("S;"); field(value.value) }
+            is KemusValue.Bytes -> { sb.append("B;"); field(base64Encode(value.value)) }
             is KemusValue.KList -> { sb.append("L;"); for (i in value.items) field(i) }
             is KemusValue.KSet -> { sb.append("T;"); for (m in value.members.sorted()) field(m) }
             is KemusValue.KHash -> {
@@ -462,6 +489,7 @@ class Kemus(
             is KemusValue.KHash -> value.entries.isEmpty()
             is KemusValue.KSortedSet -> value.scores.isEmpty()
             is KemusValue.Str -> false
+            is KemusValue.Bytes -> false
         }
         if (empty) discard(key)
     }
@@ -511,6 +539,7 @@ class Kemus(
     // so this no longer re-sums every element on each write.
     private fun valueSize(value: KemusValue): Long = when (value) {
         is KemusValue.Str -> strSize(value.value)
+        is KemusValue.Bytes -> STRING_OVERHEAD + value.value.size
         is KemusValue.KList -> COLLECTION_OVERHEAD + value.byteSize
         is KemusValue.KSet -> COLLECTION_OVERHEAD + value.byteSize
         is KemusValue.KHash -> COLLECTION_OVERHEAD + value.byteSize
@@ -645,10 +674,17 @@ class Kemus(
         throw CommandError("ERR wrong number of arguments for '${name.lowercase()}' command")
 
     private fun asStr(v: KemusValue) = v as? KemusValue.Str ?: wrongType()
+    private fun asBytes(v: KemusValue) = v as? KemusValue.Bytes ?: wrongType()
     private fun asList(v: KemusValue) = v as? KemusValue.KList ?: wrongType()
     private fun asSet(v: KemusValue) = v as? KemusValue.KSet ?: wrongType()
     private fun asHash(v: KemusValue) = v as? KemusValue.KHash ?: wrongType()
     private fun asZset(v: KemusValue) = v as? KemusValue.KSortedSet ?: wrongType()
+
+    @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
+    private fun base64Encode(bytes: ByteArray): String = kotlin.io.encoding.Base64.encode(bytes)
+
+    @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
+    private fun base64Decode(text: String): ByteArray = kotlin.io.encoding.Base64.decode(text)
 
     // --- the dispatcher -------------------------------------------------------------------------
 
@@ -731,6 +767,18 @@ class Kemus(
                 need(2)
                 val v = lookup(args[1]) ?: return Reply.Nil
                 Reply.BulkString(asStr(v).value)
+            }
+            // Binary-safe blob stored/served as base64 on the (text) wire; raw bytes in memory.
+            "SETB" -> {
+                need(3)
+                put(args[1], KemusValue.Bytes(base64Decode(args[2])))
+                record(listOf("SETB", args[1], args[2]))
+                Reply.OK
+            }
+            "GETB" -> {
+                need(2)
+                val v = lookup(args[1]) ?: return Reply.Nil
+                Reply.BulkString(base64Encode(asBytes(v).value))
             }
             // Batch fetch — one round trip for many keys. As in Redis, a missing or non-string key
             // yields nil rather than an error, so the array lines up 1:1 with the requested keys. Lets
@@ -1015,6 +1063,7 @@ class Kemus(
         for ((key, entry) in map) {
             when (val v = entry.value) {
                 is KemusValue.Str -> out.add(listOf("SET", key, v.value))
+                is KemusValue.Bytes -> out.add(listOf("SETB", key, base64Encode(v.value)))
                 is KemusValue.KList -> out.add(listOf("RPUSH", key) + v.items)
                 is KemusValue.KSet -> out.add(listOf("SADD", key) + v.members)
                 is KemusValue.KHash -> {
@@ -1082,7 +1131,7 @@ class Kemus(
 
         // Commands that may grow memory and are therefore rejected (or trigger eviction) at the limit.
         private val DENY_OOM = setOf(
-            "SET", "SETNX", "APPEND", "INCR", "DECR", "INCRBY", "DECRBY",
+            "SET", "SETB", "SETNX", "APPEND", "INCR", "DECR", "INCRBY", "DECRBY",
             "HSET", "LPUSH", "RPUSH", "SADD", "ZADD",
         )
 
