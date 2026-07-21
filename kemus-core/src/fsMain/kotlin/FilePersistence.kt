@@ -62,9 +62,17 @@ class FilePersistence(
     }
 }
 
+/**
+ * The platform's real filesystem. Provided per-platform because okio's [FileSystem.SYSTEM] is
+ * declared in each leaf target (JVM/Android/native) and is not part of okio's common API, so it
+ * cannot be referenced from this shared (metadata-compiled) source set directly.
+ */
+expect fun systemFileSystem(): FileSystem
+
 /** Open an [AOF][FilePersistence] at [path] on the platform's real filesystem. */
 fun filePersistence(path: String): Persistence {
+    val fs = systemFileSystem()
     val p = path.toPath()
-    p.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
-    return FilePersistence(FileSystem.SYSTEM, p)
+    p.parent?.let { fs.createDirectories(it) }
+    return FilePersistence(fs, p)
 }
