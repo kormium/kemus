@@ -8,8 +8,8 @@ interface is implemented both by the **embedded** in-process engine (works offli
 and by a **remote client** that speaks to a `kemus-server`. You can develop against the embedded
 store, run offline on the client, and point the same code at a shared server — without rewriting it.
 
-> Status: **0.1.0, early.** Engine, REST server and remote client are in place and tested on JVM and
-> native; every module compiles for web (JS/Wasm). APIs are not yet stable.
+> Status: **0.2.0, early.** Published to Maven Central. Engine, REST server and remote client are in
+> place and tested on JVM and native; every module compiles for web (JS/Wasm). APIs are not yet stable.
 
 ---
 
@@ -27,6 +27,32 @@ store, run offline on the client, and point the same code at a shared server —
 Every library module is multiplatform. The two server-side modules are built on ktor-server + the
 CIO engine, which run on the JVM and native — there is no HTTP server in a browser, so they do not
 target js/wasmJs. `kemus-benchmarks` is JVM-only (JMH).
+
+## Installation
+
+Published on Maven Central under `io.github.kormium`:
+
+```kotlin
+dependencies {
+    implementation("io.github.kormium:kemus-core:0.2.0")        // embedded engine
+    implementation("io.github.kormium:kemus-client:0.2.0")      // remote client
+    implementation("io.github.kormium:kemus-ktor-plugin:0.2.0") // server-side ktor plugin
+}
+```
+
+Or pin every module at once via the [BOM](#gradle-install-bom) and drop the per-artifact versions:
+
+```kotlin
+dependencies {
+    implementation(platform("io.github.kormium:kemus-bom:0.2.0"))
+    implementation("io.github.kormium:kemus-core")
+    implementation("io.github.kormium:kemus-client")
+    implementation("io.github.kormium:kemus-ktor-plugin")
+}
+```
+
+Kotlin package names stay under `io.github.kemus` (unaffected by the Maven Central group) — see the
+`import` lines in the quick-start snippets below.
 
 ## Targets
 
@@ -311,16 +337,7 @@ Docker.
 ## Gradle install (BOM)
 
 Pin every kemus library with one coordinate via the BOM, then depend on the modules without
-versions:
-
-```kotlin
-dependencies {
-    implementation(platform("io.github.kemus:kemus-bom:0.1.0"))
-    implementation("io.github.kemus:kemus-core")        // embedded engine
-    implementation("io.github.kemus:kemus-client")      // remote client
-    implementation("io.github.kemus:kemus-ktor-plugin") // server-side ktor plugin
-}
-```
+versions — see [Installation](#installation) above.
 
 ## Roadmap
 
