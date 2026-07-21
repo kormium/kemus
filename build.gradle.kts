@@ -75,7 +75,7 @@ subprojects {
             name.set("kemus")
             description.set("kemus — an embedded Kotlin Multiplatform Redis-flavoured data store (client + offline + server).")
             inceptionYear.set("2026")
-            url.set("https://github.com/kemus/kemus")
+            url.set("https://github.com/kormium/kemus")
             licenses {
                 license {
                     name.set("The Apache License, Version 2.0")
@@ -92,9 +92,9 @@ subprojects {
                 }
             }
             scm {
-                url.set("https://github.com/kemus/kemus")
-                connection.set("scm:git:https://github.com/kemus/kemus.git")
-                developerConnection.set("scm:git:ssh://git@github.com/kemus/kemus.git")
+                url.set("https://github.com/kormium/kemus")
+                connection.set("scm:git:https://github.com/kormium/kemus.git")
+                developerConnection.set("scm:git:ssh://git@github.com/kormium/kemus.git")
             }
         }
     }

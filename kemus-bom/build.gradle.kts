@@ -3,7 +3,7 @@ plugins {
 }
 
 // Bill of Materials: pins the versions of every published kemus library so consumers can depend on
-// `platform("io.github.kemus:kemus-bom:<v>")` and omit versions on the individual artifacts.
+// `platform("io.github.kormium:kemus-bom:<v>")` and omit versions on the individual artifacts.
 dependencies {
     constraints {
         listOf(
